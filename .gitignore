@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+/build/
+/dist/
+/runtime/
+*.res
+*.exe
+*.zip
+*.h5
+*.hdf5
