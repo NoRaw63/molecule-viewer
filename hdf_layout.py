@@ -26,7 +26,10 @@ class HdfMapping:
 
 COORDINATES = {"coords", "coordinates", "coord", "coordinate", "positions", "position",
                "xyz", "conformations", "conformation", "geometries", "geometry",
-               "cartesiancoordinates", "pos", "r"}
+               "cartesiancoordinates", "pos", "r",
+               "coordinatesangstrom", "coordinatesbohr", "coordinateangstrom", "coordinatebohr",
+               "coordsangstrom", "coordsbohr", "positionangstrom", "positionbohr",
+               "positionsangstrom", "positionsbohr"}
 ELEMENT_FIELDS = ("atomicnumbers", "z", "numbers", "nuclearcharges", "symbols",
                   "elementsymbols", "chemicalsymbols", "elements", "species", "atomicspecies")
 OFFSETS = ("atomoffsets", "frameoffsets", "atomptr", "frameptr", "offsets")
@@ -65,7 +68,7 @@ def scale_for(coordinates, units=""):
                 if value in UNITS:
                     return UNITS[value]
             if key not in ("units", "unit") or node is coordinates:
-                raise HdfMappingNeeded(f"{coordinates.name}: неизвестная единица длины {value!r}.")
+                raise HdfMappingNeeded(f"{coordinates.name}: unknown length unit {value!r}.")
         if node.name == "/":
             return 1.0
         node = node.parent
@@ -130,7 +133,7 @@ def find_elements(coordinates, shapes, fields):
         if candidates:
             candidates.sort(key=lambda pair: pair[0])
             if len(candidates) > 1 and candidates[0][0] == candidates[1][0]:
-                raise HdfMappingNeeded(f"{coordinates.name}: найдено несколько полей элементов.")
+                raise HdfMappingNeeded(f"{coordinates.name}: multiple element datasets found.")
             return candidates[0][1]
         if group.name == "/":
             return None
@@ -139,6 +142,15 @@ def find_elements(coordinates, shapes, fields):
 
 def mapped_field(group, name):
     return group.file.get(posixpath.normpath(posixpath.join(group.name, name))) if name else None
+
+
+def coordinate_priority(layout):
+    name = normalize(layout.coordinates.name.rsplit("/", 1)[-1])
+    if name.endswith(("angstrom", "angstroms", "ang")):
+        return 0
+    if name.endswith(("bohr", "a0", "au")):
+        return 1
+    return 2
 
 
 def valid_offsets(dataset, atom_count):
@@ -165,7 +177,7 @@ class Layout:
         start, stop = map(int, self.offsets[frame:frame + 2])
         natoms = self.elements.shape[0]
         if not 0 <= start < stop <= natoms:
-            raise ValueError(f"{self.offsets.name}: неверные границы кадра {frame + 1}.")
+            raise ValueError(f"{self.offsets.name}: invalid bounds for frame {frame + 1}.")
         return slice(start, stop)
 
     def symbols(self, frame):
@@ -180,11 +192,11 @@ class Layout:
         values = self.elements[selection]
         if values.dtype.kind in "iu":
             if np.any(values < 1) or np.any(values >= len(chemical_symbols)):
-                raise HdfMappingNeeded(f"{self.elements.name}: ожидаются атомные номера от 1 до 118.")
+                raise HdfMappingNeeded(f"{self.elements.name}: expected atomic numbers from 1 to 118.")
             return tuple(chemical_symbols[int(z)] for z in values)
         result = tuple(text(value).strip().capitalize() for value in values)
         if any(value not in SYMBOLS for value in result):
-            raise HdfMappingNeeded(f"{self.elements.name}: ожидаются символы элементов.")
+            raise HdfMappingNeeded(f"{self.elements.name}: expected chemical element symbols.")
         return result
 
     def positions(self, frame):
@@ -215,22 +227,22 @@ def make_layout(coordinates, mapping=None, fields=element_fields):
     elements = mapped_field(group, mapping.elements) if mapping else find_elements(coordinates, shapes, fields)
     if not compatible(elements, shapes):
         if mapping:
-            raise HdfMappingNeeded(f"{coordinates.name}: поле элементов отсутствует или имеет несовместимую форму.")
+            raise HdfMappingNeeded(f"{coordinates.name}: the element dataset is missing or its shape is incompatible.")
         return None
     offsets = None
     if coordinates.ndim == 2 and elements.ndim == 1:
         if mapping and mapping.offsets:
             offsets = mapped_field(group, mapping.offsets)
             if not valid_offsets(offsets, atom_count):
-                raise HdfMappingNeeded(f"{coordinates.name}: ожидался массив смещений от 0 до {atom_count}.")
+                raise HdfMappingNeeded(f"{coordinates.name}: expected frame offsets from 0 to {atom_count}.")
         elif mapping is None:
             candidates = [x for x, _ in named_fields(group, OFFSETS) if valid_offsets(x, atom_count)]
             if len(candidates) > 1:
-                raise HdfMappingNeeded(f"{coordinates.name}: найдено несколько массивов смещений.")
+                raise HdfMappingNeeded(f"{coordinates.name}: multiple offset datasets found.")
             if candidates:
                 offsets = candidates[0]
     elif mapping and mapping.offsets:
-        raise HdfMappingNeeded("Смещения применяются к плоскому массиву координат и элементов.")
+        raise HdfMappingNeeded("Frame offsets require flat coordinate and element arrays.")
     return Layout(coordinates, elements, offsets, scale_for(coordinates, mapping.units if mapping else ""),
                   transposed, elements.ndim == 2 and elements.shape[0] > 1)
 
@@ -255,7 +267,12 @@ def file_geometries(file, cancelled, mapping=None):
         layouts = [layout for dataset, _ in named_fields(group, COORDINATES)
                    if (layout := make_layout(dataset, fields=fields)) is not None]
         if len(layouts) > 1:
-            raise HdfMappingNeeded(f"{group.name}: найдено несколько полей координат.")
+            priority = min(map(coordinate_priority, layouts))
+            preferred = [layout for layout in layouts if coordinate_priority(layout) == priority]
+            if len(preferred) == 1:
+                layouts = preferred
+            else:
+                raise HdfMappingNeeded(f"{group.name}: multiple coordinate datasets found.")
         if layouts:
             yield from layouts
         elif "conformations" in group and "smiles" in group:
