@@ -38,7 +38,7 @@ TRACK_MAX = 1_000_000
 
 
 def number(value):
-    return f"{value:,}".replace(",", "\u202f")
+    return f"{value:,}"
 
 
 class Canvas(QWidget):
@@ -93,7 +93,7 @@ class Canvas(QWidget):
         if frame is None:
             painter.setPen(QColor("#bdccdc"))
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
-                             "Перетащите сюда .hdf5 или .extxyz")
+                             "Drop an .hdf5, .h5, or .extxyz file here")
             return
 
         cp, sp, cy, sy = cos(self.pitch), sin(self.pitch), cos(self.yaw), sin(self.yaw)
@@ -197,18 +197,18 @@ class FormulaList(QAbstractListModel):
 class MappingDialog(QDialog):
     def __init__(self, source, parent, reason=""):
         super().__init__(parent)
-        self.setWindowTitle("Поля HDF5")
+        self.setWindowTitle("HDF5 fields")
         self.resize(720, 240)
         self.automatic = False
         layout = QVBoxLayout(self)
-        hint = QLabel(reason or "Выберите массивы координат и элементов в файле.")
+        hint = QLabel(reason or "Choose the coordinate and element datasets.")
         hint.setTextFormat(Qt.TextFormat.PlainText)
         hint.setWordWrap(True)
         layout.addWidget(hint)
         help_text = QLabel(
-            "Можно выбрать путь из списка или ввести его. Для повторяющихся групп "
-            "используйте * в пути координат, например /molecules/*/xyz. "
-            "Поля элементов и смещений можно задать относительно группы координат.")
+            "Select a path or enter one. For repeated groups, "
+            "use * in the coordinate path, such as /molecules/*/xyz. "
+            "Element and offset paths can be relative to the coordinate group.")
         help_text.setWordWrap(True)
         layout.addWidget(help_text)
 
@@ -223,23 +223,23 @@ class MappingDialog(QDialog):
             label.setWordWrap(True)
             layout.addWidget(label)
         mapping = source.mapping
-        self.coordinates = self.field(form, "Координаты", coordinates,
+        self.coordinates = self.field(form, "Coordinates", coordinates,
                                       mapping.coordinates if mapping else "", "/data/positions")
-        self.elements = self.field(form, "Символы или атомные номера", elements,
+        self.elements = self.field(form, "Symbols or atomic numbers", elements,
                                    mapping.elements if mapping else "", "atomic_numbers")
-        self.offsets = self.field(form, "Смещения кадров", offsets,
-                                  mapping.offsets if mapping else "", "Только для плоского массива")
+        self.offsets = self.field(form, "Frame offsets", offsets,
+                                  mapping.offsets if mapping else "", "For flat arrays")
         self.units = QComboBox()
-        for label, value in (("Из файла, иначе Å", ""), ("Ангстремы (Å)", "angstrom"),
-                             ("Нанометры (nm)", "nm"), ("Боры (bohr)", "bohr")):
+        for label, value in (("From file, defaults to Å", ""), ("Angstroms (Å)", "angstrom"),
+                             ("Nanometers (nm)", "nm"), ("Bohr (bohr)", "bohr")):
             self.units.addItem(label, value)
         self.units.setCurrentIndex(self.units.findData(mapping.units if mapping else ""))
-        form.addRow("Единицы длины", self.units)
+        form.addRow("Length units", self.units)
         buttons = QDialogButtonBox()
-        self.apply = buttons.addButton("Открыть", QDialogButtonBox.ButtonRole.AcceptRole)
-        buttons.addButton("Отмена", QDialogButtonBox.ButtonRole.RejectRole)
+        self.apply = buttons.addButton("Open", QDialogButtonBox.ButtonRole.AcceptRole)
+        buttons.addButton("Cancel", QDialogButtonBox.ButtonRole.RejectRole)
         if mapping:
-            automatic = buttons.addButton("Определить автоматически", QDialogButtonBox.ButtonRole.ActionRole)
+            automatic = buttons.addButton("Auto-detect", QDialogButtonBox.ButtonRole.ActionRole)
             automatic.clicked.connect(self.choose_auto)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -289,14 +289,14 @@ class FrameDataPanel(QWidget):
         self.status.setTextFormat(Qt.TextFormat.PlainText)
         header.addWidget(self.status, 1)
         self.filter = QLineEdit()
-        self.filter.setPlaceholderText("Фильтр полей")
+        self.filter.setPlaceholderText("Filter fields")
         self.filter.textChanged.connect(self.filter_rows)
         header.addWidget(self.filter)
         layout.addLayout(header)
         split = QSplitter()
         layout.addWidget(split, 1)
         self.table = QTreeWidget()
-        self.table.setHeaderLabels(["Поле", "Значение", "Единицы"])
+        self.table.setHeaderLabels(["Field", "Value", "Units"])
         self.table.setRootIsDecorated(False)
         self.table.setUniformRowHeights(True)
         self.table.header().setStretchLastSection(False)
@@ -306,7 +306,7 @@ class FrameDataPanel(QWidget):
         self.table.currentItemChanged.connect(self.show_value)
         split.addWidget(self.table)
         self.value = QPlainTextEdit()
-        self.value.setAccessibleName("Значение поля кадра")
+        self.value.setAccessibleName("Frame field value")
         self.value.setReadOnly(True)
         self.value.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
         split.addWidget(self.value)
@@ -317,11 +317,11 @@ class FrameDataPanel(QWidget):
         self.value.clear()
         if not message:
             if fields:
-                message = f"Поля кадра · {number(len(fields))}"
+                message = f"Frame fields · {number(len(fields))}"
                 if len(fields) >= MAX_FIELDS:
-                    message += " (первые 512)"
+                    message += " (first 512)"
             else:
-                message = "У этого кадра нет доступных полей."
+                message = "No additional data is available for this frame."
         self.status.setText(message)
         for field in fields:
             item = QTreeWidgetItem([field.name, field.summary, field.units])
@@ -418,7 +418,7 @@ def read_fields_task(request, key, source, index, cancelled, signals):
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Просмотрщик молекул")
+        self.setWindowTitle("Molecule Viewer")
         self.resize(1050, 700)
         self.setAcceptDrops(True)
         self.source = None
@@ -450,21 +450,21 @@ class Window(QMainWindow):
         main = QVBoxLayout(outer)
         self.setCentralWidget(outer)
         header = QHBoxLayout()
-        button = QPushButton("Открыть файл…")
+        button = QPushButton("Open file…")
         button.clicked.connect(self.choose_file)
         header.addWidget(button)
-        self.filename = QLabel("Файл не открыт")
+        self.filename = QLabel("No file open")
         self.filename.setTextFormat(Qt.TextFormat.PlainText)
         self.filename.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         header.addWidget(self.filename, 1)
         self.progress = QLabel()
         header.addWidget(self.progress)
-        self.mapping_button = QPushButton("Поля HDF5…")
+        self.mapping_button = QPushButton("HDF5 fields…")
         self.mapping_button.clicked.connect(lambda: self.choose_mapping())
         self.mapping_button.hide()
         header.addWidget(self.mapping_button)
         main.addLayout(header)
-        action = QAction("Открыть файл…", self)
+        action = QAction("Open file…", self)
         action.setShortcut(QKeySequence.StandardKey.Open)
         action.triggered.connect(self.choose_file)
         self.addAction(action)
@@ -474,9 +474,9 @@ class Window(QMainWindow):
         left = QWidget()
         left.setMinimumWidth(180)
         left_layout = QVBoxLayout(left)
-        left_layout.addWidget(QLabel("Формулы"))
+        left_layout.addWidget(QLabel("Formulas"))
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Найти формулу")
+        self.search.setPlaceholderText("Find a formula")
         self.search.returnPressed.connect(self.find_formula)
         left_layout.addWidget(self.search)
         self.model = FormulaList()
@@ -506,32 +506,32 @@ class Window(QMainWindow):
         right_layout.addWidget(self.view_split, 1)
         self.data_panel.hide()
         display = QHBoxLayout()
-        hydrogen = QCheckBox("Показать водороды")
+        hydrogen = QCheckBox("Show hydrogen atoms")
         hydrogen.toggled.connect(self.canvas.show_hydrogen)
         display.addWidget(hydrogen)
-        self.data_toggle = QCheckBox("Данные кадра")
+        self.data_toggle = QCheckBox("Frame data")
         self.data_toggle.toggled.connect(self.toggle_fields)
         display.addWidget(self.data_toggle)
         display.addStretch()
-        reset = QPushButton("Сбросить вид")
+        reset = QPushButton("Reset view")
         reset.clicked.connect(self.canvas.reset)
         display.addWidget(reset)
         right_layout.addLayout(display)
 
         nav = QHBoxLayout()
-        self.prev_button = QPushButton("Назад")
+        self.prev_button = QPushButton("Previous")
         self.prev_button.clicked.connect(lambda: self.set_position(self.position - 1))
         nav.addWidget(self.prev_button)
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.valueChanged.connect(self.slide_to)
-        self.slider.setAccessibleName("Конформер")
+        self.slider.setAccessibleName("Conformer")
         nav.addWidget(self.slider, 1)
-        self.next_button = QPushButton("Вперёд")
+        self.next_button = QPushButton("Next")
         self.next_button.clicked.connect(lambda: self.set_position(self.position + 1))
         nav.addWidget(self.next_button)
-        nav.addWidget(QLabel("Конформер"))
+        nav.addWidget(QLabel("Conformer"))
         self.frame_input = QLineEdit()
-        self.frame_input.setAccessibleName("Номер конформера")
+        self.frame_input.setAccessibleName("Conformer number")
         self.frame_input.setFixedWidth(85)
         self.frame_input.editingFinished.connect(self.jump)
         nav.addWidget(self.frame_input)
@@ -544,8 +544,8 @@ class Window(QMainWindow):
         self.update_nav()
 
     def choose_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Открыть структуры", "",
-                                             "Структуры (*.hdf5 *.h5 *.extxyz);;Все файлы (*)")
+        path, _ = QFileDialog.getOpenFileName(self, "Open structures", "",
+                                             "Structures (*.hdf5 *.h5 *.extxyz);;All files (*)")
         if path:
             self.open_file(path)
 
@@ -559,7 +559,7 @@ class Window(QMainWindow):
             event.acceptProposedAction()
             self.open_file(paths[0])
         elif paths:
-            self.statusBar().showMessage("Перетащите один файл.", 5500)
+            self.statusBar().showMessage("Drop one file at a time.", 5500)
 
     def choose_mapping(self, reason=""):
         if self.source is None or self.source.is_xyz:
@@ -580,7 +580,7 @@ class Window(QMainWindow):
                 except (OSError, ValueError, TypeError):
                     pass
         except (OSError, ValueError) as error:
-            QMessageBox.warning(self, "Не удалось открыть файл", str(error))
+            QMessageBox.warning(self, "Could not open file", str(error))
             return
         self.cancelled.set()
         self.cancelled = Event()
@@ -600,7 +600,7 @@ class Window(QMainWindow):
         self.filename.setText(source.path.name)
         self.filename.setToolTip(str(source.path))
         self.statusBar().clearMessage()
-        self.progress.setText("Сканирование…")
+        self.progress.setText("Indexing…")
         self.details.clear()
         self.canvas.show_frame(None)
         self.canvas.reset()
@@ -624,12 +624,12 @@ class Window(QMainWindow):
             self.update_nav()
             self.canvas.show_frame(None)
             self.details.clear()
-            self.progress.setText("Ошибка чтения")
+            self.progress.setText("Read error")
             self.statusBar().showMessage(error)
             if needs_mapping:
                 self.choose_mapping(error)
             else:
-                QMessageBox.warning(self, "Не удалось прочитать файл", error)
+                QMessageBox.warning(self, "Could not read file", error)
             return
         if staging:
             pointer = path.with_suffix(".pointer")
@@ -665,8 +665,8 @@ class Window(QMainWindow):
             if entry:
                 self.count = entry[2]
                 self.update_nav()
-        summary = f"{number(total)} кадров · {number(groups)} формул"
-        self.progress.setText(summary if complete else f"Сканирование… {summary}")
+        summary = f"Frames: {number(total)} · Formulas: {number(groups)}"
+        self.progress.setText(summary if complete else f"Indexing… {summary}")
 
     def find_formula(self):
         if self.index_db is None:
@@ -680,7 +680,7 @@ class Window(QMainWindow):
             self.formulas.setCurrentIndex(index)
             self.formulas.scrollTo(index)
         else:
-            self.statusBar().showMessage("Формула не найдена среди прочитанных кадров.", 4000)
+            self.statusBar().showMessage("Formula not found in the indexed frames.", 4000)
 
     def select_group(self, index, previous):
         if not index.isValid():
@@ -724,7 +724,7 @@ class Window(QMainWindow):
         self.shown_request = None
         self.cancel_fields()
         if self.data_toggle.isChecked():
-            self.data_panel.set_fields(message="Ожидание кадра…")
+            self.data_panel.set_fields(message="Waiting for frame…")
         self.frame_timer.stop()
         if self.frame_future:
             self.frame_future.cancel()
@@ -736,7 +736,7 @@ class Window(QMainWindow):
         if position != self.position:
             self.position = position
             self.invalidate_frame()
-            self.details.setText("Чтение кадра…")
+            self.details.setText("Loading frame…")
             self.frame_timer.start()
         self.frame_input.setModified(False)
         self.update_nav()
@@ -760,16 +760,16 @@ class Window(QMainWindow):
             return
         self.canvas.show_frame(frame)
         if error:
-            self.details.setText("Не удалось прочитать кадр. " + error)
+            self.details.setText("Could not read frame. " + error)
             return
         self.shown_request = request
         self.frame_cache.add(key, frame)
         entry = self.model.entry(self.group - 1)
-        details = f"{frame.description} · атомов: {number(len(frame.elements))}"
+        details = f"{frame.description} · atoms: {number(len(frame.elements))}"
         if entry:
             details = f"{entry[1]} · {details}"
         if frame.inferred_bonds:
-            details += " · связи по расстояниям"
+            details += " · distance-based bonds"
         self.details.setText(details)
         if self.data_toggle.isChecked():
             self.request_fields()
@@ -792,9 +792,9 @@ class Window(QMainWindow):
     def request_fields(self):
         self.cancel_fields()
         if self.shown_request != self.request or self.index_db is None:
-            self.data_panel.set_fields(message="Выберите кадр.")
+            self.data_panel.set_fields(message="Select a frame.")
             return
-        self.data_panel.set_fields(message="Чтение полей кадра…")
+        self.data_panel.set_fields(message="Loading frame data…")
         self.data_cancelled = Event()
         self.data_future = self.data_pool.submit(
             read_fields_task, self.request, (self.group, self.position),
@@ -802,7 +802,7 @@ class Window(QMainWindow):
 
     def fields_ready(self, request, fields, error):
         if request == self.request and self.data_toggle.isChecked():
-            message = "Не удалось прочитать поля. " + error if error else ""
+            message = "Could not read frame data. " + error if error else ""
             self.data_panel.set_fields(fields, message)
 
     def closeEvent(self, event):
