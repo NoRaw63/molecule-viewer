@@ -19,7 +19,7 @@ dist = COLLECT(exe, a.binaries, a.datas, name='MoleculeViewer', upx=False)
 app = BUNDLE(
     dist,
     name='MoleculeViewer.app',
-    version='1.3.1',
+    version='1.4.0',
     icon=str(assets / 'MoleculeViewer.icns'),
     bundle_identifier='org.moleculeviewer.desktop',
     info_plist={
