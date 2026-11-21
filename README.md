@@ -6,7 +6,10 @@
 
 ## Скачать
 
-Готовые ZIP-архивы для macOS Apple Silicon и Windows x64 доступны в [релизе v1.3.1](https://github.com/NoRaw63/molecule-viewer/releases/tag/v1.3.1). На Windows распакуйте весь ZIP и запустите `MoleculeViewer.exe`. На macOS распакуйте ZIP и откройте `MoleculeViewer.app`.
+Сборки доступны в [релизе v1.3.1](https://github.com/NoRaw63/molecule-viewer/releases/tag/v1.3.1).
+
+- **macOS Apple Silicon.** Скачайте ZIP, распакуйте и откройте `MoleculeViewer.app`.
+- **Windows x64.** Скачайте три части ZIP и объедините их по инструкции в релизе. Распакуйте полученный архив целиком и запустите `MoleculeViewer.exe`.
 
 ## Использование
 
