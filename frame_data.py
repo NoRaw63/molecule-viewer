@@ -36,7 +36,7 @@ def format_scalar(value):
 def make_field(name, value, units="", original_shape=None):
     if isinstance(value, dict):
         detail = str(value)[:16000]
-        return Field(name, f"{len(value)} полей", units, detail)
+        return Field(name, f"{len(value)} fields", units, detail)
     try:
         array = np.asarray(value)
     except (ValueError, TypeError):
@@ -50,14 +50,14 @@ def make_field(name, value, units="", original_shape=None):
         array, _ = preview(array)
     summary = " × ".join(map(str, shape))
     if array.ndim == 2 and shape[-1] == 3 and array.dtype.kind in "iuf":
-        detail = "  №        X            Y            Z\n"
+        detail = "  #        X            Y            Z\n"
         detail += "\n".join(f"{row:4}  " + "  ".join(f"{format_scalar(v):>12}" for v in vector)
                             for row, vector in enumerate(array, 1))
     else:
         detail = np.array2string(array, precision=12, threshold=MAX_COMPONENTS,
                                  max_line_width=112)
     if array.shape != shape:
-        detail += f"\n\nПоказано первых {array.size} из {prod(shape)} значений."
+        detail += f"\n\nShowing {array.size} of {prod(shape)} values."
     return Field(name, summary, units, detail[:80000])
 
 
@@ -219,7 +219,7 @@ def hdf_frame_fields(file, address, offset, cancelled):
             value, shape = preview(dataset, selection)
             fields.append(make_field(name, value, units_for(dataset, general_units), shape))
         except (OSError, TypeError, ValueError, UnicodeError):
-            fields.append(Field(name, "Не удалось прочитать", "", "Поле есть в файле, но его значение недоступно."))
+            fields.append(Field(name, "Could not read", "", "This field exists in the file, but its value is unavailable."))
     return fields
 
 
