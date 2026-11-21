@@ -40,9 +40,9 @@ class Source:
     def open(cls, path, cache_dir, mapping=None):
         path = Path(path).resolve(strict=True)
         if not path.is_file():
-            raise ValueError("Выберите файл.")
+            raise ValueError("Choose a file.")
         if path.suffix.lower() not in {".hdf5", ".h5", ".extxyz"}:
-            raise ValueError("Поддерживаются .hdf5, .h5 и .extxyz.")
+            raise ValueError("Supported formats are .hdf5, .h5, and .extxyz.")
         return cls(path, cls.index_path(path, cache_dir, mapping), mapping)
 
     @staticmethod
@@ -57,7 +57,7 @@ class Source:
 
     def check_unchanged(self):
         if self.cache_path != self.index_path(self.path, self.cache_path.parent, self.mapping):
-            raise ValueError("Файл изменился. Откройте его снова.")
+            raise ValueError("The file has changed. Open it again.")
 
     @property
     def is_xyz(self):
@@ -114,7 +114,7 @@ class Index:
                 (group_id, frame_number),
             ).fetchone()
         if row is None:
-            raise ValueError("Кадр ещё не проиндексирован.")
+            raise ValueError("This frame has not been indexed yet.")
         address, last, count, original = row
         offset = frame_number - (last - count) - 1
         return address, offset, original + offset
@@ -135,9 +135,9 @@ def atom_count(line):
     try:
         count = int(line.removeprefix(b"\xef\xbb\xbf"))
     except ValueError:
-        raise ValueError("Ожидалось число атомов в начале кадра.") from None
+        raise ValueError("Expected an atom count at the start of the frame.") from None
     if count < 1:
-        raise ValueError("Кадр должен содержать хотя бы один атом.")
+        raise ValueError("A frame must contain at least one atom.")
     return count
 
 
@@ -147,20 +147,20 @@ def species_columns(header):
         return 0, None
     fields = next(value for value in match.groups() if value is not None).split(b":")
     if len(fields) % 3:
-        raise ValueError("Некорректное поле Properties в заголовке кадра.")
+        raise ValueError("Invalid Properties field in the frame header.")
     offset = 0
     species = atomic_number = None
     for name, _, raw_width in zip(fields[::3], fields[1::3], fields[2::3]):
         width = int(raw_width)
         if width < 1:
-            raise ValueError("Некорректная ширина поля Properties.")
+            raise ValueError("Invalid column width in Properties.")
         if name == b"species" and width == 1:
             species = offset
         elif name == b"Z" and width == 1:
             atomic_number = offset
         offset += width
     if species is None and atomic_number is None:
-        raise ValueError("В Properties отсутствует species или Z.")
+        raise ValueError("Properties must contain species or Z.")
     return species, atomic_number
 
 
@@ -180,7 +180,7 @@ def xyz_records(path, cancelled):
                 count = atom_count(line)
                 header = stream.readline()
                 if not header:
-                    raise ValueError("Отсутствует строка заголовка.")
+                    raise ValueError("Missing frame header.")
                 species, atomic_number = species_columns(header)
                 column = species if species is not None else atomic_number
                 elements = []
@@ -189,20 +189,20 @@ def xyz_records(path, cancelled):
                         return
                     fields = stream.readline().split(None, column + 1)
                     if len(fields) <= column:
-                        raise ValueError(f"Неполная строка атома {atom + 1}.")
+                        raise ValueError(f"Incomplete row for atom {atom + 1}.")
                     token = fields[column]
                     if species is None:
                         z = int(token)
                         if not 0 < z < len(chemical_symbols):
-                            raise ValueError(f"Неизвестный атомный номер {z}.")
+                            raise ValueError(f"Unknown atomic number {z}.")
                         elements.append(chemical_symbols[z])
                     else:
                         try:
                             elements.append(symbol_bytes[token.capitalize()])
                         except KeyError:
-                            raise ValueError(f"Неизвестный элемент {token!r}.") from None
+                            raise ValueError(f"Unknown element {token!r}.") from None
             except ValueError as error:
-                raise ValueError(f"Кадр {number}: {error}") from error
+                raise ValueError(f"Frame {number}: {error}") from error
             yield formula(elements), address, 1
 
 
@@ -214,10 +214,10 @@ def hdf_topology(group):
     molecule = Chem.MolFromSmiles(smiles, params)
     coordinates = group["conformations"]
     if molecule is None or coordinates.ndim != 3 or coordinates.shape[-1] != 3:
-        raise ValueError(f"{group.name}: некорректные SMILES или форма координат.")
+        raise ValueError(f"{group.name}: invalid SMILES or coordinate array shape.")
     indices = [atom.GetAtomMapNum() - 1 for atom in molecule.GetAtoms()]
     if sorted(indices) != list(range(coordinates.shape[1])):
-        raise ValueError(f"{group.name}: нумерация атомов в SMILES и координатах расходится.")
+        raise ValueError(f"{group.name}: atom indices in the SMILES and coordinates do not match.")
     return molecule, indices, scale_for(coordinates)
 
 
@@ -283,9 +283,9 @@ def build_index(source, destination, cancelled, progress):
         source.check_unchanged()
         if total == 0:
             if source.is_xyz:
-                raise ValueError("В файле нет кадров.")
+                raise ValueError("The file contains no frames.")
             raise HdfMappingNeeded(
-                "Не удалось подобрать координаты и элементы. Укажите поля HDF5 вручную.")
+                "Coordinates and elements could not be detected. Choose the HDF5 fields manually.")
         db.execute("UPDATE state SET complete = 1, frames = ?", (total,))
         db.commit()
         db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -315,13 +315,13 @@ def load_frame(source, location):
     address, offset, original = location
     source.check_unchanged()
     if source.is_xyz:
-        return inferred_frame(read_xyz_atoms(source.path, address), f"Кадр файла № {original:,}")
+        return inferred_frame(read_xyz_atoms(source.path, address), f"File frame {original:,}")
 
     with h5py.File(source.path, "r") as file:
         layout, frame = hdf_frame_layout(file, address, offset)
         if layout is not None:
             group = layout.coordinates.parent.name.strip("/")
-            description = f"Кадр файла № {original:,}"
+            description = f"File frame {original:,}"
             if group:
                 parts = " · ".join(unquote(part) for part in group.split("/"))
                 description = f"{parts} · {description}"
@@ -341,7 +341,7 @@ def load_frame(source, location):
     bonds = tuple((indices[bond.GetBeginAtomIdx()], indices[bond.GetEndAtomIdx()])
                   for bond in molecule.GetBonds())
     return Frame(xyz, tuple(elements), bonds, tuple(fragments),
-                 f"{address.lstrip('/')} · кадр группы № {offset + 1:,}")
+                 f"{address.lstrip('/')} · group frame {offset + 1:,}")
 
 
 def inferred_frame(atoms, description):
@@ -357,7 +357,7 @@ def inferred_frame(atoms, description):
 
 def ensure_coordinates(xyz):
     if not len(xyz) or not np.isfinite(xyz).all():
-        raise ValueError("В кадре отсутствуют конечные координаты атомов.")
+        raise ValueError("The frame has no atoms or contains non-finite coordinates.")
 
 
 class FrameCache:
